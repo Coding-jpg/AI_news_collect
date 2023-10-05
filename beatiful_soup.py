@@ -66,6 +66,6 @@ def fetch_wechat_article(url, use_proxy=True):
 # test
 if __name__ == '__main__':
     # url = "https://mp.weixin.qq.com/s/0SUOXbpbybQgSvQh96cOAw"
-    url = "https://mp.weixin.qq.com/s/eWlms4IxTd4wzka4V7Gu6w"
+    url = "https://mp.weixin.qq.com/s/qIwYJAfD5bXJS6j0xtp2cw"
     article = fetch_wechat_article(url, use_proxy=False)
-    print(article)
+    print(article['content'])

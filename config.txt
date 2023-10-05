@@ -1,14 +1,14 @@
 {
     "Language": "Chinese",
-    "Prompt": "You are an assistant that summarizes content in {Language} and categorizes it into one of the following categories: '{categories}'. Please provide a summary in 150 characters and specify the category. Additionally, it identifies the function in {Language} mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:\"\") (Function: \"\") '.",
+    "Prompt": "You are an assistant that summarizes content in {Language} and categorizes it into one of the following categories: '{categories}'. Please provide a summary in 300 characters and specify the category. Additionally, it identifies the function in {Language} mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:category) (Function: function) '.",
     "Categories": [
         "text",
         "video",
         "music",
         "agent"
     ],
-    "Openai_Key": "",
-    "app_id": "",
-    "app_secret": "",
-    "container_id": ""
+    "Openai_Key": "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",
+    "app_id": "cli_a4feb05323bcd013",
+    "app_secret": "vSb6N3LWyyuo1NW23woZQhRzbRuDJwlv",
+    "container_id": "oc_62d3816fdf4b46fea997a089dbab3d78"
 }
