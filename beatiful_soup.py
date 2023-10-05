@@ -3,22 +3,37 @@ import requests
 from bs4 import BeautifulSoup as bs
 
 def parse_section(sections):
-    content = ""
+    content_str = ""
     for section in sections:
         if section.name is None:
-            content += section
-        elif section.name == "p":
-            tmp = "".join(content.text if hasattr(content, 'text') else str(content) for content in section.contents)
-            content += tmp
-        else:
-            print(f"Unhandled tag: {section.name}")
-    return content
+            content_str += str(section)
+        elif section.name in ["p", "span", "div", "h1", "h2", "h3", "h4", "h5", "h6"]:
+            tmp = "".join(child.text if hasattr(child, 'text') else str(child) for child in section.contents)
+            content_str += tmp
+        elif section.name == "a":
+            tmp = f"{section.text.strip()} ({section['href']})"
+            content_str += tmp
+        elif section.name in ["strong", "em"]:
+            tmp = f"<{section.name}>{section.text.strip()}</{section.name}>"
+            content_str += tmp
+
+    return content_str
+
 
 def fetch_wechat_article(url, use_proxy=True):
+    """
+    resolve url (only for weixin)
+    return a dict{'title', 'author', 'content'}
+    """
     result = {}
     session = requests.Session()
     
-    # 如果不使用代理，设置session的代理为None
+    # User-Agent header
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    # set None without using proxy
     if not use_proxy:
         session.proxies = {
             "http": None,
@@ -26,13 +41,15 @@ def fetch_wechat_article(url, use_proxy=True):
         }
     
     try:
-        html = session.get(url, proxies={"http": None, "https": None})  # 使用session.get()代替requests.get()
-        soup = bs(html.text, "lxml")
+        html = session.get(url, headers=headers, proxies={"http": None, "https": None})
+        safe_content = html.text
+        soup = bs(safe_content, "lxml")
         
         body = soup.find(class_="rich_media_area_primary_inner")
         title = body.find(class_="rich_media_title").text.strip()
         author = body.find(class_="rich_media_meta rich_media_meta_nickname").a.text.strip()
         content_p = body.find(class_="rich_media_content")
+        # print(content_p)
         content_lst = content_p.contents
 
         content = parse_section(content_lst)
@@ -45,8 +62,10 @@ def fetch_wechat_article(url, use_proxy=True):
     
     return result
 
-# 测试函数
+
+# test
 if __name__ == '__main__':
-    url = "https://mp.weixin.qq.com/s/hm5widzIJoPI29kEcpcwdQ"
-    article = fetch_wechat_article(url, use_proxy=False)  # 设置use_proxy为False以取消代理
+    # url = "https://mp.weixin.qq.com/s/0SUOXbpbybQgSvQh96cOAw"
+    url = "https://mp.weixin.qq.com/s/eWlms4IxTd4wzka4V7Gu6w"
+    article = fetch_wechat_article(url, use_proxy=False)
     print(article)

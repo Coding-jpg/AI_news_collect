@@ -3,8 +3,10 @@ import re
 import time
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
+from lark_oapi.api.bitable.v1 import *
 from beatiful_soup import fetch_wechat_article
 from sumarize import get_from_content
+import os
 
 
 def fetch_messages(client, container_id, start_time, end_time):
@@ -50,9 +52,6 @@ def extract_urls_from_messages(response_body):
 		urls.extend(found_urls)
 	return urls
 
-import lark_oapi as lark
-from lark_oapi.api.bitable.v1 import *
-
 def create_app_table_record(content_type, summary, file_link, last_updated, resource_name):
 	client = lark.Client.builder() \
 		.enable_set_token(True) \
@@ -85,32 +84,64 @@ def create_app_table_record(content_type, summary, file_link, last_updated, reso
 	return response.data
 
 if __name__ == "__main__":
-	# 创建client
-	client = lark.Client.builder() \
-		.app_id("cli_a4feb05323bcd013") \
-		.app_secret("vSb6N3LWyyuo1NW23woZQhRzbRuDJwlv").build()
+	# get robot app_id and app_secret
+	if not os.path.exists('config.txt'):
+		default_config = {
+			"Language": "English",
+			"Prompt": "You are an assistant that summarizes content in {Language} and categorizes it into one of the following categories: '{categories}'. Please provide a summary in 150 characters and specify the category. Additionally, it identifies the function in {Language} mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:\"\") (Function: \"\") '.",
+			"Categories": ["text", "video", "music", "agent"],
+			"Openai_Key": "",
+			"app_id": "",
+			"app_secret": "",
+			"container_id": ""
+		}
+		with open('config.txt', 'w', encoding='utf-8') as file:
+			json.dump(default_config, file, ensure_ascii=False, indent=4)
 
-	container_id = "oc_2728e43ac521d6d3ac8fc2b93ccfb6ce"
+	# read config
+	with open('config.txt', 'r', encoding='utf-8') as file:
+		config = json.load(file)
+
+	# set app_id, app_secret
+	app_id = config["app_id"]
+	app_secret = config["app_secret"]
+
+	# set client
+	client = lark.Client.builder() \
+		.app_id(f"{app_id}") \
+		.app_secret(f"{app_secret}").build()
+
+	container_id = config["container_id"]
 
 	# 初始化上次循环的结束时间为当前时间
 	# last_end_time = str(int(time.time()))
-	last_end_time = '1679938800'
+	# 9月25日0:00 时间戳
+	last_end_time = '1689964800'
 	while True:
 		# 使用上次循环的结束时间作为这次循环的开始时间
 		start_time = last_end_time
 		# 获取当前时间作为这次循环的结束时间
 		end_time = str(int(time.time()))
-		# end_time = 1695487695
+		# 9月25日24：00 时间戳
+		# end_time = 1690051200
 
 		data = fetch_messages(client=client, container_id=container_id, start_time=start_time, end_time=end_time)
 		urls = extract_urls_from_messages(data)
 		for url in urls:
-			result = fetch_wechat_article(url=url)
-			if result:
-				summary, category, function = get_from_content(result['content'])
-				# create_app_table_record(content_type='', summary=summary,file_link=url, last_updated=int(time.time() * 1000),resource_name=result['title'])
-		print(f"{summary} \n{category} \n{function}")
+			try:
+				result = fetch_wechat_article(url=url)
+				# print(f"result{result}")
+				if result:
+					summary, category, function = get_from_content(result['content'])
+					if summary==None // category==None // function==None:
+						break
 
+					print(f"{summary} \n{category} \n{function}")
+				time.sleep(5)
+
+			except Exception as e:
+				print(f"An error occurred while processing the URL {url}: {e}")
+				# create_app_table_record(content_type='', summary=summary,file_link=url, last_updated=int(time.time() * 1000),resource_name=result['title'])
 		# 保存这次循环的结束时间，以便下次循环使用
 		last_end_time = end_time
 
