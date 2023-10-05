@@ -7,8 +7,8 @@
         "music",
         "agent"
     ],
-    "Openai_Key": "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",
-    "app_id": "cli_a4feb05323bcd013",
-    "app_secret": "vSb6N3LWyyuo1NW23woZQhRzbRuDJwlv",
-    "container_id": "oc_62d3816fdf4b46fea997a089dbab3d78"
+    "Openai_Key": "",
+    "app_id": "",
+    "app_secret": "",
+    "container_id": ""
 }
