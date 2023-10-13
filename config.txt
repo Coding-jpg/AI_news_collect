@@ -1,7 +1,8 @@
 {
     "Language": "Chinese",
-    "Prompt": "You are an assistant that summarizes content in {Language} and categorizes it into one of the following categories: '{categories}'. Please provide a summary in 300 characters and specify the category. Additionally, it identifies the function in {Language} mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:category) (Function: function) '.",
-    "Categories": [
+    "Prompt": "Please provide a summary in 300 characters and specify the category into one of the following categories: '{categories}'. Additionally, it identifies the function mentioned in the content based on its context. Give the response in the format 'Summary: 内容 (Category: 分类) (Function: 功能) '. The content and function should be {Language}.",
+    "idea_system_content": "Given the following features, combine them to generate a product idea. Give the idea and brief description within 150 characters. All the answer should be in chinese. The format should be like: 产品名称：name\n 产品描述：description。",
+        "Categories": [
         "text",
         "video",
         "music",
@@ -10,5 +11,7 @@
     "Openai_Key": "",
     "app_id": "",
     "app_secret": "",
-    "container_id": ""
+    "container_id": "",
+    "app_token": "",
+    "table_id":  ""
 }

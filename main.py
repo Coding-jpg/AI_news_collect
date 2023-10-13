@@ -9,11 +9,20 @@ from beatiful_soup import fetch_wechat_article
 from sumarize import get_from_content
 import os
 import time
+from opt_db import insert_record
+import thread
 
 # Global variable to store the last refresh time
 last_refresh_time = 0
-current_refresh_token = "初始的refresh_token"
+current_refresh_token = "initial refresh_token"
 
+"""
+refresh the user_access_token
+params:
+APP_ID, APP_SECRET
+output:
+user_access_token
+"""
 def refresh_user_access_token(APP_ID, APP_SECRET):
 	global last_refresh_time, current_refresh_token
 
@@ -23,34 +32,84 @@ def refresh_user_access_token(APP_ID, APP_SECRET):
 		.log_level(lark.LogLevel.DEBUG) \
 		.build()
 
+	"""
+	Request refresh user_access_token
+	params:
+	grant_type, refresh_token
+	return refresh_token
+	"""
 	request: CreateRefreshAccessTokenRequest = CreateRefreshAccessTokenRequest.builder() \
 		.request_body(CreateRefreshAccessTokenRequestBody.builder()
 			.grant_type("refresh_token")
-			.refresh_token(current_refresh_token)  # 使用当前的refresh_token
+			.refresh_token(current_refresh_token)
 			.build()) \
 		.build()
 
 	response: CreateRefreshAccessTokenResponse = client.authen.v1.refresh_access_token.create(request)
 
 	if not response.success():
+		print("test")
 		lark.logger.error(
 			f"client.authen.v1.refresh_access_token.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
-		return None
+		
+		"""
+		Request get authorize code
+		params:
+		app_id, redirect_url
+		return authorize code
+		"""
+		code_request: GetAuthorizeRequest = GetAuthorizeRequest.builder() \
+			.app_id(APP_ID) \
+			.redirect_uri("https://open.feishu.cn/api-explorer/cli_a4feb05323bcd013") \
+			.build()
+	
+		code_response: GetAuthorizeResponse = client.authen.v1.authorize.get(code_request)
+	
+		if not code_response.success():
+			lark.logger.error(
+				f"client.authen.v1.authorize.get failed, code: {code_response.code}, msg: {code_response.msg}, log_id: {code_response.get_log_id()}")
+			return
 
-	# 更新last_refresh_time和current_refresh_token
+		code = code_response.data.code
+		"""
+		Request get user_access_token
+		params:
+		grant_type, code
+		return refresh_token
+		"""
+		user_token_request: CreateOidcAccessTokenRequest = CreateOidcAccessTokenRequest.builder() \
+			.request_body(CreateOidcAccessTokenRequestBody.builder()
+				.grant_type("authorization_code")
+				.code(code)
+				.build()) \
+			.build()
+	
+		user_token_response: CreateOidcAccessTokenResponse = client.authen.v1.oidc_access_token.create(user_token_request)
+	
+		# return while failed to get user_token_response
+		if not user_token_response.success():
+			lark.logger.error(
+				f"client.authen.v1.oidc_access_token.create failed, code: {user_token_response.code}, msg: {user_token_response.msg}, log_id: {user_token_response.get_log_id()}")
+			return
+
+		current_refresh_token = user_token_response.data.refresh_token
+
+		request: CreateRefreshAccessTokenRequest = CreateRefreshAccessTokenRequest.builder() \
+			.request_body(CreateRefreshAccessTokenRequestBody.builder()
+				.grant_type("refresh_token")
+				.refresh_token(current_refresh_token)  # 使用当前的refresh_token
+				.build()) \
+			.build()
+
+		response: CreateRefreshAccessTokenResponse = client.authen.v1.refresh_access_token.create(request)
+
+	# last_refresh_time和current_refresh_token
 	last_refresh_time = time.time()
 	current_refresh_token = response.data.refresh_token  # 保存新的refresh_token
-
+	print(f"refresh_token: {refresh_toekn}")
 	return response.data.user_access_token
 
-# ... [rest of your code]
-
-	user_access_token = refresh_user_access_token(APP_ID=app_id, APP_SECRET=app_secret)
-	if not user_access_token:
-		lark.logger.error("Failed to refresh user_access_token.")
-		return None
-
-def fetch_messages(client, container_id, start_time, end_time):
+def fetch_messages_from_group(client, container_id, start_time, end_time):
 	
 
 	# 构造请求对象
@@ -71,8 +130,6 @@ def fetch_messages(client, container_id, start_time, end_time):
 			f"client.im.v1.message.list failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
 		return None
 
-	# 处理业务结果
-	# lark.logger.info(lark.JSON.marshal(response.data, indent=4))
 	return response.data
 
 """
@@ -86,11 +143,11 @@ def extract_urls_from_messages(response_body):
 	for item in items:
 		content = item.body.content if hasattr(item.body, 'content') else ''
 		try:
-			# 尝试将 content 转换为字典
+			# tansform content into dict
 			content_dict = json.loads(content)
 			text = content_dict.get('text', '')
 		except json.JSONDecodeError:
-			# 如果转换失败，直接使用 content
+			# directly use content while failed
 			text = content
 
 		# 使用正则表达式找到所有的 URL
@@ -103,59 +160,61 @@ create a new record in feishu table
 """
 def create_app_table_record(content_type, summary, file_link, \
 		last_updated, resource_name, est_time, function, \
-		app_id, app_secret):
+		app_id, app_secret, app_token, table_id):
 	client = lark.Client.builder() \
-		.enable_set_token(True) \
+		.app_id(app_id) \
+		.app_secret(app_secret) \
 		.log_level(lark.LogLevel.DEBUG) \
 		.build()
 
-
-	# Refresh the user_access_token
+	"""
+	Refresh the user_access_token
+	"""
 	# user_access_token = refresh_user_access_token(APP_ID=app_id, APP_SECRET=app_secret)
 	# if not user_access_token:
 	# 	lark.logger.error("Failed to refresh user_access_token.")
 	# 	return None
 
-	user_access_token = 'u-fx95vXe2J26pLhzML4nHhQh5hjNxl0pbMW00g5e00AL4'
-
+	# build request
 	request: CreateAppTableRecordRequest = CreateAppTableRecordRequest.builder() \
-		.app_token("I3PdbCcDkakWERsLWMucXKygnNh") \
-		.table_id("tblS1FNmOKM4rPlT") \
+		.app_token(app_token) \
+		.table_id(table_id) \
 		.request_body(AppTableRecord.builder()
 			.fields({
-				"内容类型": content_type,
-				"摘要": summary,
-				"文件链接": file_link,
-				"最近更新": last_updated,
-				"资料名称": resource_name,
-				"功能": function,
-				"原文估计阅读时间": est_time+"分钟"
-			})
+					"内容类型": content_type,
+					"摘要": summary,
+					"文件链接": file_link,
+					"最近更新": last_updated,
+					"资料名称": resource_name,
+					"功能": function,
+					"原文估计阅读时间": est_time
+				})
 			.build()) \
 		.build()
 
-	option = lark.RequestOption.builder().user_access_token("u-fx95vXe2J26pLhzML4nHhQh5hjNxl0pbMW00g5e00AL4").build()
-	response: CreateAppTableRecordResponse = client.bitable.v1.app_table_record.create(request, option)
+	# build response
+	response: CreateAppTableRecordResponse = client.bitable.v1.app_table_record.create(request)
 
 	if not response.success():
 		lark.logger.error(
 			f"client.bitable.v1.app_table_record.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
 		return None
 
-	# lark.logger.info(lark.JSON.marshal(response.data, indent=4))
-	return response.data
+	print("Successfully create table record.")
 
-if __name__ == "__main__":
+def News_collect():
 	# get robot app_id and app_secret
 	if not os.path.exists('config.txt'):
 		default_config = {
-			"Language": "English",
-			"Prompt": "You are an assistant that summarizes content in {Language} and categorizes it into one of the following categories: '{categories}'. Please provide a summary in 150 characters and specify the category. Additionally, it identifies the function in {Language} mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:\"\") (Function: \"\") '.",
+			"Language": "Chinese",
+			"Prompt": "Please provide a summary in 300 characters and specify the category into one of the following categories: '{categories}'. Additionally, it identifies the function mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:category) (Function: function) '. The content and function should be {Language}.",
 			"Categories": ["text", "video", "music", "agent"],
 			"Openai_Key": "",
 			"app_id": "",
 			"app_secret": "",
-			"container_id": ""
+			"container_id": "",
+			"app_token": "",
+			"table_id": ""
 		}
 		with open('config.txt', 'w', encoding='utf-8') as file:
 			json.dump(default_config, file, ensure_ascii=False, indent=4)
@@ -164,7 +223,7 @@ if __name__ == "__main__":
 	with open('config.txt', 'r', encoding='utf-8') as file:
 		config = json.load(file)
 
-	# set app_id, app_secret
+	# set app_id, app_secret, Language
 	app_id = config["app_id"]
 	app_secret = config["app_secret"]
 	container_id = config["container_id"]
@@ -178,22 +237,33 @@ if __name__ == "__main__":
 	# 初始化上次循环的结束时间为当前时间
 	last_end_time = str(int(time.time()))
 
-	# last_end_time = '1696089240'
-
 	while True:
 		# 使用上次循环的结束时间作为这次循环的开始时间
 		start_time = last_end_time
 		# 获取当前时间作为这次循环的结束时间
 		end_time = str(int(time.time()))
 
-		data = fetch_messages(client=client, container_id=container_id, start_time=start_time, end_time=end_time)
+		# read config inf from config.txt
+		with open('config.txt', 'r', encoding='utf-8') as file:
+			config = json.load(file)
+
+		app_token = config['app_token']
+		table_id = config['table_id']
+
+		data = fetch_messages_from_group(client=client, container_id=container_id, start_time=start_time, end_time=end_time)
 		urls = extract_urls_from_messages(data)
 		for url in urls:
 			try:
 				result = fetch_wechat_article(url=url)
 				# print(f"result{result}")
 				if result:
+
+					"""
+					All the data used
+					"""
 					summary, category, function, est_time = get_from_content(result['content'])
+					title, ID_time, last_updated= result['title'], int(time.time()), int(time.time() * 1000)
+
 					if summary is None or category is None or function is None:
 						raise Exception
 
@@ -202,15 +272,25 @@ if __name__ == "__main__":
 
 			except Exception as e:
 				print(f"An error occurred while processing the URL {url}: {e}")
-		# 写入多维表
+
+		# insert into database
+			insert_record(ID_time, title, category, url, summary, last_updated, function, est_time)
+		# create base table record with data
 			create_app_table_record(content_type=category, summary=summary,file_link=url, \
-				last_updated=int(time.time() * 1000),resource_name=result['title'], \
+				last_updated=last_updated,resource_name=title, \
 				est_time=est_time, function=function, app_id=app_id, \
-				app_secret=app_secret)
+				app_secret=app_secret, app_token=app_token, table_id=table_id)
 		# 保存这次循环的结束时间，以便下次循环使用
 		last_end_time = end_time
 		# 等待 30 秒
 		time.sleep(30)
+
+
+# test the process for collecting news
+if __name__ == "__main__":
+
+	News_collect()
+	
 
 
 
