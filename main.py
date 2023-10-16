@@ -5,16 +5,17 @@ import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
 from lark_oapi.api.bitable.v1 import *
 from lark_oapi.api.authen.v1 import *
-from beatiful_soup import fetch_wechat_article
+from resolve import fetch_wechat_article
 from sumarize import get_from_content
 import os
 import time
 from opt_db import insert_record
-import thread
+from tools import create_default_config, idea_match
+from Idea_gen import generate_idea
 
 # Global variable to store the last refresh time
-last_refresh_time = 0
-current_refresh_token = "initial refresh_token"
+# last_refresh_time = 0
+# current_refresh_token = "initial refresh_token"
 
 """
 refresh the user_access_token
@@ -48,7 +49,6 @@ def refresh_user_access_token(APP_ID, APP_SECRET):
 	response: CreateRefreshAccessTokenResponse = client.authen.v1.refresh_access_token.create(request)
 
 	if not response.success():
-		print("test")
 		lark.logger.error(
 			f"client.authen.v1.refresh_access_token.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
 		
@@ -107,6 +107,7 @@ def refresh_user_access_token(APP_ID, APP_SECRET):
 	last_refresh_time = time.time()
 	current_refresh_token = response.data.refresh_token  # 保存新的refresh_token
 	print(f"refresh_token: {refresh_toekn}")
+
 	return response.data.user_access_token
 
 def fetch_messages_from_group(client, container_id, start_time, end_time):
@@ -153,6 +154,7 @@ def extract_urls_from_messages(response_body):
 		# 使用正则表达式找到所有的 URL
 		found_urls = url_pattern.findall(text)
 		urls.extend(found_urls)
+
 	return urls
 
 """
@@ -187,7 +189,7 @@ def create_app_table_record(content_type, summary, file_link, \
 					"最近更新": last_updated,
 					"资料名称": resource_name,
 					"功能": function,
-					"原文估计阅读时间": est_time
+					"原文估计阅读时间": est_time+"分钟"
 				})
 			.build()) \
 		.build()
@@ -202,24 +204,14 @@ def create_app_table_record(content_type, summary, file_link, \
 
 	print("Successfully create table record.")
 
+	return
+
+"""
+main func
+"""
+@create_default_config
 def News_collect():
 	# get robot app_id and app_secret
-	if not os.path.exists('config.txt'):
-		default_config = {
-			"Language": "Chinese",
-			"Prompt": "Please provide a summary in 300 characters and specify the category into one of the following categories: '{categories}'. Additionally, it identifies the function mentioned in the content based on its context. Give the response in the format 'Summary:content (Category:category) (Function: function) '. The content and function should be {Language}.",
-			"Categories": ["text", "video", "music", "agent"],
-			"Openai_Key": "",
-			"app_id": "",
-			"app_secret": "",
-			"container_id": "",
-			"app_token": "",
-			"table_id": ""
-		}
-		with open('config.txt', 'w', encoding='utf-8') as file:
-			json.dump(default_config, file, ensure_ascii=False, indent=4)
-
-	# read config
 	with open('config.txt', 'r', encoding='utf-8') as file:
 		config = json.load(file)
 
@@ -234,7 +226,7 @@ def News_collect():
 		.app_secret(f"{app_secret}").build()
 
 
-	# 初始化上次循环的结束时间为当前时间
+	# init the last end time
 	last_end_time = str(int(time.time()))
 
 	while True:
@@ -285,10 +277,59 @@ def News_collect():
 		# 等待 30 秒
 		time.sleep(30)
 
+	return
+
+@create_default_config
+def Idea_gen_insert():
+	idea, urls = generate_idea()
+	idea_name, idea_description = idea_match(idea)
+	content_type = "IDEA"
+	last_updated = int(time.time() * 1000)
+	with open('config.txt', 'r', encoding='utf-8') as file:
+		config = json.load(file)
+
+	app_id = config['app_id']
+	app_secret = config['app_secret']
+	app_token = config['app_token']
+	table_id = config['table_id']
+
+	client = lark.Client.builder() \
+		.app_id(app_id) \
+		.app_secret(app_secret) \
+		.log_level(lark.LogLevel.DEBUG) \
+		.build()
+
+	# build request
+	request: CreateAppTableRecordRequest = CreateAppTableRecordRequest.builder() \
+		.app_token(app_token) \
+		.table_id(table_id) \
+		.request_body(AppTableRecord.builder()
+			.fields({
+					"内容类型": content_type,
+					"文件链接": urls,
+					"最近更新": last_updated,
+					"产品名称": idea_name,
+					"产品描述": idea_description
+				})
+			.build()) \
+		.build()
+
+	# build response
+	response: CreateAppTableRecordResponse = client.bitable.v1.app_table_record.create(request)
+
+	if not response.success():
+		lark.logger.error(
+			f"client.bitable.v1.app_table_record.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
+		return None
+
+	print("Successfully create table record for idea.")
+
+	return
+
 
 # test the process for collecting news
 if __name__ == "__main__":
-
+	# Idea_gen_insert()
 	News_collect()
 	
 
