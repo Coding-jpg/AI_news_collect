@@ -266,7 +266,7 @@ def News_collect():
 				print(f"An error occurred while processing the URL {url}: {e}")
 
 		# insert into database
-			insert_record(ID_time, title, category, url, summary, last_updated, function, est_time)
+			insert_record((ID_time, title, category, url, summary, last_updated, function, est_time))
 		# create base table record with data
 			create_app_table_record(content_type=category, summary=summary,file_link=url, \
 				last_updated=last_updated,resource_name=title, \
