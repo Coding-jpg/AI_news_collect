@@ -8,10 +8,10 @@
         "music",
         "agent"
     ],
-    "Openai_Key": "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",
-    "app_id": "cli_a4feb05323bcd013",
-    "app_secret": "vSb6N3LWyyuo1NW23woZQhRzbRuDJwlv",
-    "container_id": "oc_62d3816fdf4b46fea997a089dbab3d78",
-    "app_token": "I3PdbCcDkakWERsLWMucXKygnNh",
-    "table_id":  "tblS1FNmOKM4rPlT"
+    "Openai_Key": "",
+    "app_id": "",
+    "app_secret": "",
+    "container_id": "",
+    "app_token": "",
+    "table_id":  ""
 }
