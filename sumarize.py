@@ -22,6 +22,7 @@ def get_from_content(user_content):
 
 	# estimated time for reading
 	est_time = f"{text_len // read_rate}"
+	print(f"estimated time for reading: {est_time}分钟.")
 
 	# get config from config.txt
 	with open('config.txt', 'r', encoding='utf-8') as file:
